@@ -1,17 +1,6 @@
--- 최종!! 수납일자 기준이 모호한 관계로 아래와 같이 적용
--- 관리파트 협의 사항 적용
--- 서비스료 포함, 수가기준을 예약내역의 정보로 수정.
-SELECT TO_CHAR(A.ORDDATE,'MM') "MONTHS"
-     , DECODE(SUBSTR(A.PKGTYP,1,1),'1','4.정밀'
-                                  ,'0','5.맞춤'
-                                  ,'2','6.건강의학'
-                                  ,'3','3.VIP+임원'
-                                  ,'4',DECODE(A.PKGTYP,'4A','1.CEO','4B','2.숙박')
-             ,'7.특화'
-             ) PKGTYP
-     , A.PKGCODE, A.PKGNM, A.ORDCODE, C.ORDNAME, A.ADDYN, COUNT(A.PATNO) CNT, SUM(NVL(A.EXAMAMT,'0')) AMT
+SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, B.PKGTYP, B.PKGNM, A.ORDCODE, A.ORDSEQNO, A.ADDYN, A.EXAMAMT
   FROM (-- 개인별 검사 항목별 수가
-        SELECT A.*, C.PKGTYP, C.PKGNM
+        SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, A.ORDCODE, C.PATFG, C.APPATFG, C.ORDSEQNO, A.ADDYN
              , CASE
                     WHEN A.ORDCODE LIKE 'SMX%' THEN (-- 건진서비스관련 수납 비용
                                                      SELECT SUM(X.CREAMT) SERVICEAMT /* 수납에 (-) 발생하는 경우도 있으므로 SUM으로 계산 */
@@ -120,11 +109,8 @@ SELECT TO_CHAR(A.ORDDATE,'MM') "MONTHS"
                    AND C.EXAMTYP = '4'
                ) A
              , SM0SUGAT B
-             , SMPKGMST C
-         WHERE A.PKGCODE = C.PKGCODE
-           AND SUBSTR(C.PKGTYP,1,1) != '7'
-           AND C.PKGCODE != 'THSL'
-           AND A.ORDCODE = B.EXAMCODE(+)
+             , MMEXMORT C
+         WHERE A.ORDCODE = B.EXAMCODE(+)
            AND (-- 건진일자 기준 수가 적용, 단, 건진 수가가 2013년에서야 체계적으로 관리 됨.
                 /* 만약 그 이전 결과를 작업하는 경우는 보험수가 기준으로 적용이 필요.*/
                 nvl(B.FROMDT,'1900-01-01') < A.ORDDATE
@@ -136,8 +122,10 @@ SELECT TO_CHAR(A.ORDDATE,'MM') "MONTHS"
                 AND
                 A.ORDCODE NOT LIKE 'SM08%'-- 내시경 DC처방
                )
+           AND A.PATNO = C.PATNO(+) -- 향정약은 처방테이블에서 정보관리 안 하므로 필요.
+           AND A.ORDDATE = C.ORDDATE(+)
+           AND A.ORDCODE = C.ORDCODE(+)
        ) A
-     , MMORDRCT C
- WHERE A.ORDCODE = C.ORDCODE(+)
- GROUP BY TO_CHAR(A.ORDDATE,'MM'), A.PKGTYP, A.PKGCODE, A.PKGNM, A.ORDCODE, C.ORDNAME, A.ADDYN
- ORDER BY 1,2,3,5
+     , SMPKGMST B
+ WHERE NVL(A.PATFG,'G') = 'G' -- 처방일자의 건진처방만 고려
+   AND A.PKGCODE = B.PKGCODE
