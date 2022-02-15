@@ -63,12 +63,6 @@ SELECT A.GRP, A.SUBGRP, A.PKGCODE, B.PKGNM, B.PKGTYP, C.CODENAME, COUNT(A.PATNO)
                                  WHERE A.ORDDATE BETWEEN TO_DATE('20130101','YYYYMMDD') AND TO_DATE('20131231','YYYYMMDD')
                                    AND A.EPTEXAMRMCODE IN ('AR03','CM16','CF11')
                                    AND A.RSVNOSM NOT IN (-- 시작, 종료시간이 없는 사람 제외!!
-                                                         '05906870018'
-                                                        ,'05906889020'
-                                                        ,'12321510019'
-                                                        ,'27460235002'
-                                                        ,'29988117006'
-                                                        ,'30023706001'
                                                         )
                                    AND A.EXAMEPTTYP NOT IN ('N','S')
                                  GROUP BY A.PATNO, A.RSVNOSM
