@@ -15,7 +15,7 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
      , A.ABCACTDR
      , A.RSVNOSM
   FROM (-- 개인별 검사 항목별 수가
-        SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, A.ORDCODE, C.PATFG, C.APPATFG, C.ORDSEQNO, A.ADDYN
+        SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, A.ORDCODE, A.PATFG, A.APPATFG, A.ORDSEQNO
              , CASE
                     WHEN A.ORDCODE LIKE 'SMX%' THEN (-- 건진서비스관련 수납 비용
                                                      SELECT SUM(X.CREAMT) SERVICEAMT /* 수납에 (-) 발생하는 경우도 있으므로 SUM으로 계산 */
@@ -31,106 +31,70 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
                                ,B.GRPSUGA                         -- 나머지는 건진우대
                                )
                END EXAMAMT
-             , NVL(A.SUGATYP,'1') RECDTYP -- 건진수가타입
-             , C.ABCACTDT
-             , NVL(C.ABCMEDDP,DECODE(C.MEDLOCATFG,'M','SM','CSM')) ABCMEDDP
-             , NVL(C.ABCACTDP,DECODE(C.MEDLOCATFG,'M','SM','CSM')) ABCACTDP
-             , C.ABCORDDR
-             , C.ABCACTDR
-          FROM (-- 1.PKG 기본검사 처방
-                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP
-                     , A.PKGCODE, B.ORDCODE, '' ADDYN
+             , NVL(A.SUGATYP,'1') RECDTYP -- 건진수가타입(0-PKG총 수익액, 1-건진, 2-건진보험, 3-건진일반, 4-건진국제, 5-건진우대, 6-감면금액)
+             , A.ABCACTDT
+             , A.ABCMEDDP
+             , A.ABCACTDP
+             , A.ABCORDDR
+             , A.ABCACTDR
+          FROM (
+                -- 1. 검사처방
+                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, B.ORDCODE, B.ORDSEQNO, B.PATFG, B.APPATFG
+                     , TO_CHAR(B.ABCACTDT) ABCACTDT
+                     , NVL(B.ABCMEDDP,DECODE(B.MEDLOCATFG,'M','SM','CSM')) ABCMEDDP
+                     , NVL(B.ABCACTDP,DECODE(B.MEDLOCATFG,'M','SM','CSM')) ABCACTDP
+                     , B.ABCORDDR
+                     , B.ABCACTDR
                   FROM SMRSV00T A, MMEXMORT B
                  WHERE A.ORDDATE BETWEEN TO_DATE('&FROMDT','YYYYMMDD') AND TO_DATE('&TODT','YYYYMMDD')
                    AND A.CANCELTIME IS NULL
                    AND A.PATNO = B.PATNO
                    AND A.ORDDATE = B.ORDDATE
                    AND B.PATFG = 'G'
---                   AND B.EXECTIME IS NOT NULL   /* 실시여부를 떠나 처방을 D/C 하지 않은 것은 PKG 수가에 이미 포함된 것이므로 조건 삭제.*/
-                   AND NOT EXISTS (-- 추가,선택 검사중 일반 처방 제외
-                                   SELECT 'Y'
-                                     FROM SMADD00T X
-                                    WHERE A.RSVNOSM = X.RSVNOSM
-                                      AND X.EXAMTYP IN ('1','2')
-                                      AND X.CANCELTIME IS NULL
-                                      AND X.PKGEXAMCODE = B.ORDCODE
-                                  )
-                   AND NOT EXISTS (-- 추가,선택 검사중 USERSET 처방 제외
-                                   SELECT 'Y'
-                                     FROM SMADD00T X
-                                    WHERE A.RSVNOSM = X.RSVNOSM
-                                      AND X.EXAMTYP IN ('1','2')
-                                      AND X.CANCELTIME IS NULL
-                                      AND B.ORDCODE IN (
-                                                        SELECT Y.ORDCODE
-                                                          FROM SMPKGMDT Y
-                                                         WHERE X.PKGEXAMCODE = Y.PKGCODE
-                                                       )
-                                  )
                 UNION ALL
-                -- PKG 2.추가검사 처방
-                -- 추가검사 처방 중 USERSET 제외
-                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP
-                     , A.PKGCODE, B.PKGEXAMCODE ORDCODE, 'Y' ADDYN
+                -- 2. 향정약처방
+                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, B.MATCODE, B.ORDSEQNO+6000 ORDSEQNO, B.PATFG, B.APPATFG
+                     , TO_CHAR(B.ABCACTDT) ABCACTDT
+                     , NVL(B.ABCMEDDP,DECODE(B.MEDLOCATFG,'M','SM','CSM')) ABCMEDDP
+                     , NVL(B.ABCACTDP,DECODE(B.MEDLOCATFG,'M','SM','CSM')) ABCACTDP
+                     , B.ABCORDDR
+                     , B.ABCACTDR
+                  FROM SMRSV00T A, SWSNDMAT B
+                 WHERE A.ORDDATE BETWEEN TO_DATE('&FROMDT','YYYYMMDD') AND TO_DATE('&TODT','YYYYMMDD')
+                   AND A.CANCELTIME IS NULL
+                   AND A.PATNO = B.PATNO
+                   AND A.ORDDATE = B.ORDDATE
+                   AND B.PATFG = 'G'
+                UNION ALL
+                -- 3. 처방 외 수납발생용 코드
+                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, B.PKGEXAMCODE ORDCODE, B.SEQNO+7000 ORDSEQNO, '' PATFG, '' APPATFG
+                     , '' ABCACTDT
+                     , DECODE(A.MEDLOCATFG,'M','SM','CSM') ABCMEDDP
+                     , DECODE(A.MEDLOCATFG,'M','SM','CSM') ABCACTDP
+                     , '' ABCORDDR
+                     , '' ABCACTDR
                   FROM SMRSV00T A, SMADD00T B
                  WHERE A.ORDDATE BETWEEN TO_DATE('&FROMDT','YYYYMMDD') AND TO_DATE('&TODT','YYYYMMDD')
                    AND A.CANCELTIME IS NULL
                    AND A.RSVNOSM = B.RSVNOSM
-                   AND B.EXAMTYP = '1'
+                   AND (
+                        EXISTS (/* 강제 수납 발생코드 */
+                                SELECT 'Y'
+                                  FROM CCCOMCDT X
+                                 WHERE X.GRPCODE = 'SMM071'
+                                   AND B.PKGEXAMCODE = X.CODE
+                               )
+                       OR
+                        EXISTS (/* MMEXMORT에 처방 발생되지 않는 USERSET */
+                                SELECT 'Y'
+                                  FROM SMPKGMDT X
+                                 WHERE B.PKGEXAMCODE = X.PKGCODE
+                                   AND X.ORDCODE = 'T'
+                               )
+                       )
                    AND B.CANCELTIME IS NULL
-                   AND NOT EXISTS (
-                                   SELECT 'Y'
-                                     FROM SMPKGMDT Y
-                                    WHERE B.PKGEXAMCODE = Y.PKGCODE
-                                      AND B.PKGEXAMCODE NOT LIKE 'SM0002S%'-- 처방 미발생하고 수납받기 위한 USERSET
-                                      AND Y.EXAMTYP = '4'
-                                  )
-                UNION ALL
-                -- 추가검사 처방 중 USERSET 세부항목
-                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP
-                     , A.PKGCODE, C.ORDCODE ORDCODE, 'Y' ADDYN
-                  FROM SMRSV00T A, SMADD00T B, SMPKGMDT C
-                 WHERE A.ORDDATE BETWEEN TO_DATE('&FROMDT','YYYYMMDD') AND TO_DATE('&TODT','YYYYMMDD')
-                   AND A.CANCELTIME IS NULL
-                   AND A.RSVNOSM = B.RSVNOSM
-                   AND B.EXAMTYP = '1'
-                   AND B.CANCELTIME IS NULL
-                   AND B.PKGEXAMCODE = C.PKGCODE
-                   AND C.EXAMTYP = '4'
-                UNION ALL
-                -- PKG 3.선택검사 처방
-                -- 선택검사 처방 중 USERSET 제외
-                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP
-                     , A.PKGCODE, B.PKGEXAMCODE ORDCODE, '' ADDYN
-                  FROM SMRSV00T A, SMADD00T B
-                 WHERE A.ORDDATE BETWEEN TO_DATE('&FROMDT','YYYYMMDD') AND TO_DATE('&TODT','YYYYMMDD')
-                   AND A.CANCELTIME IS NULL
-                   AND A.RSVNOSM = B.RSVNOSM
-                   AND B.EXAMTYP = '2'
-                   AND B.CANCELTIME IS NULL
-                   AND NVL(B.ORGEXAMCODE,'N') NOT LIKE 'SM08%' -- 향정약 원처방을 내시경 DC처방 이용한 CASE 제외
-                   AND NOT EXISTS (
-                                   SELECT 'Y'
-                                     FROM SMPKGMDT Y
-                                    WHERE B.PKGEXAMCODE = Y.PKGCODE
-                                      AND Y.EXAMTYP = '4'
-                                  )
-                UNION ALL
-                -- 선택검사 처방 중 USERSET 세부항목
-                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP
-                     , A.PKGCODE, C.ORDCODE ORDCODE, '' ADDYN
-                  FROM SMRSV00T A, SMADD00T B, SMPKGMDT C
-                 WHERE A.ORDDATE BETWEEN TO_DATE('&FROMDT','YYYYMMDD') AND TO_DATE('&TODT','YYYYMMDD')
-                   AND A.CANCELTIME IS NULL
-                   AND A.RSVNOSM = B.RSVNOSM
-                   AND B.EXAMTYP = '2'
-                   AND B.CANCELTIME IS NULL
-                   AND NVL(B.ORGEXAMCODE,'N') NOT LIKE 'SM08%' -- 향정약 원처방을 내시경 DC처방 이용한 CASE 제외
-                   AND B.PKGEXAMCODE = C.PKGCODE
-                   AND C.EXAMTYP = '4'
                ) A
              , SM0SUGAT B
-             , MMEXMORT C
          WHERE A.ORDCODE = B.EXAMCODE(+)
            AND (-- 건진일자 기준 수가 적용, 단, 건진 수가가 2013년에서야 체계적으로 관리 됨.
                 /* 만약 그 이전 결과를 작업하는 경우는 보험수가 기준으로 적용이 필요.*/
@@ -143,9 +107,6 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
                 AND
                 A.ORDCODE NOT LIKE 'SM08%'-- 내시경 DC처방
                )
-           AND A.PATNO = C.PATNO(+) -- 향정약은 처방테이블에서 정보관리 안 하므로 필요.
-           AND A.ORDDATE = C.ORDDATE(+)
-           AND A.ORDCODE = C.ORDCODE(+)
        ) A
      , SMPKGMST B
  WHERE NVL(A.PATFG,'G') = 'G' -- 처방일자의 건진처방만 고려
@@ -162,7 +123,7 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
      , 0 DCAMT
      , 0 INSPRICE
      , '0' RECDTYP
-     , A.ORDDATE ABCACTDT
+     , '' ABCACTDT
      , DECODE(A.MEDLOCATFG,'M','SM','CSM') ABCMEDDP
      , DECODE(A.MEDLOCATFG,'M','SM','CSM') ABCACTDP
      , '' ABCORDDR
@@ -189,7 +150,7 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
      , SUM(B.CREAMT) DCAMT
      , 0 INSPRICE
      , '6' RECDTYP
-     , A.ORDDATE ABCACTDT
+     , '' ABCACTDT
      , DECODE(A.MEDLOCATFG,'M','SM','CSM') ABCMEDDP
      , DECODE(A.MEDLOCATFG,'M','SM','CSM') ABCACTDP
      , '' ABCORDDR
@@ -204,6 +165,7 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
    AND SUBSTR(C.PKGTYP,1,1) NOT IN ('7','8')    -- 스포츠외래, 국제진료소 제외
    AND A.RSVNOSM = B.RSVNOSM
    AND B.RCPTYP = '5'
-   AND NVL(DCRATE,'0') != '0' -- 단체 부담금도 RCPTYP = '5'이므로 구분 필요!!
+   AND B.CONTNO IS NULL            -- 단체 부담금도 RCPTYP = '5'이므로 구분 필요!!
+--   AND B.PKGEXAMCODE != 'CUSTDC' -- 단체 부담금도 RCPTYP = '5'이므로 구분 필요!!
  GROUP BY A.ORDDATE, A.PATNO, A.RSVNOSM,A.MEDLOCATFG
- ORDER BY 1,3,2,5;
+ ORDER BY 3,2,5;
