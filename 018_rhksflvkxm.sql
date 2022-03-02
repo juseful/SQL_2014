@@ -53,7 +53,7 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
                    AND B.PATFG = 'G'
                 UNION ALL
                 -- 2. 향정약처방
-                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, B.MATCODE, B.ORDSEQNO+6000 ORDSEQNO, B.PATFG, B.APPATFG
+                SELECT A.ORDDATE, A.PATNO, A.RSVNOSM, A.SUGATYP, A.PKGCODE, B.MATCODE, B.SEQNO+6000 ORDSEQNO, B.PATFG, B.APPATFG
                      , TO_CHAR(B.ABCACTDT) ABCACTDT
                      , NVL(B.ABCMEDDP,DECODE(B.MEDLOCATFG,'M','SM','CSM')) ABCMEDDP
                      , NVL(B.ABCACTDP,DECODE(B.MEDLOCATFG,'M','SM','CSM')) ABCACTDP
@@ -165,7 +165,6 @@ SELECT TO_CHAR(A.ORDDATE,'YYYYMM') YYMM
    AND SUBSTR(C.PKGTYP,1,1) NOT IN ('7','8')    -- 스포츠외래, 국제진료소 제외
    AND A.RSVNOSM = B.RSVNOSM
    AND B.RCPTYP = '5'
-   AND B.CONTNO IS NULL            -- 단체 부담금도 RCPTYP = '5'이므로 구분 필요!!
---   AND B.PKGEXAMCODE != 'CUSTDC' -- 단체 부담금도 RCPTYP = '5'이므로 구분 필요!!
+--   AND PSNGRPTYP = 'S'            -- 단체 부담금도 RCPTYP = '5'이므로 구분 필요!!
  GROUP BY A.ORDDATE, A.PATNO, A.RSVNOSM,A.MEDLOCATFG
  ORDER BY 3,2,5;
