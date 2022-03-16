@@ -1,0 +1,17 @@
+SELECT  A.OPTION7 RCGRP, A.OPTION1 ORDCODE, B.ORDNAME
+      , A.OPTION6, A.OPTION2 RSLTCODE, C.RSLTCODENM, A.OPTION3 NUMVALUE
+      , DECODE(A.OPTION4,'1','동일'
+                        ,'2','초과'
+                        ,'3','미만'
+                        ,'4','이상'
+                        ,'5','이하'
+                        ,'') QUALIFICATION
+      , A.OPTION5 SEX, A.OPTION8 STARTDATE, A.OPTION9 ENDDATE, A.OPTION10 ERYN
+  FROM CCCOMCDT A, MMORDRCT B, SMCDRSMT C
+ WHERE A.GRPCODE = 'SM306'
+--   AND A.OPTION7 = 'R'
+   AND A.OPTION9 = '29991231'
+   AND A.OPTION1 = B.ORDCODE(+)
+   AND A.OPTION1 = C.EXAMCODE(+)
+   AND A.OPTION2 = C.RSLTCODE(+)
+ ORDER BY 1, 2, 9;
