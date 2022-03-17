@@ -1,0 +1,43 @@
+-- 최종
+SELECT DECODE(A.PKGTYP,'3A','1.임원','2.배우자') PKGTYP, B.ORDCODE, C.ORDNAME, A.CUSTNM, COUNT(A.PATNO) CNT
+  FROM (-- 대상자
+        SELECT B.PKGTYP, A.PATNO, C.CUSTNM
+          FROM SMRSV00T A, SMPKGMST B, SMCUST0T C
+         WHERE A.ORDDATE BETWEEN TO_dATE('20140301','YYYYMMDD') AND TO_dATE('20141130','YYYYMMDD')
+           AND A.CANCELTIME IS NULL
+           AND A.CONTNO IS NOT NULL
+           AND A.PKGCODE = B.PKGCODE
+           AND (
+                B.PKGTYP IN ('3A','3B')
+               AND
+                B.PKGCODE NOT LIKE 'SCE%'
+               or
+                B.PKGCODE = 'MG15'
+               )
+           AND SUBSTR(CONTNO,1,6) = C.CUSTCODE
+        UNION ALL
+        SELECT B.PKGTYP, A.PATNO, C.CUSTNM
+          FROM SMRSV00T A, SMPKGMST B, SMCUST0T C
+         WHERE A.ORDEPTDATE BETWEEN TO_dATE('20141201','YYYYMMDD') AND TO_dATE('20141231','YYYYMMDD')
+           AND A.CANCELTIME IS NULL
+           AND A.CONTNO IS NOT NULL
+           AND A.PKGCODE = B.PKGCODE
+           AND (
+                B.PKGTYP IN ('3A','3B')
+               AND
+                B.PKGCODE NOT LIKE 'SCE%'
+               or
+                B.PKGCODE = 'MG15'
+               )
+           AND SUBSTR(CONTNO,1,6) = C.CUSTCODE
+       ) A
+     , MMMEDORT B
+     , MMORDRCT C
+ WHERE A.PATNO = B.PATNO
+   AND B.ORDDATE BETWEEN TO_dATE('20140901','YYYYMMDD') AND TO_dATE('20141130','YYYYMMDD')
+   AND B.ORDCODE in ('XINFTF','XPNEU','XPNE13A')
+   AND B.DCYN != 'Y'
+   AND B.DGRTNFG IS NULL
+   AND B.ORDCODE = C.ORDCODE
+ GROUP BY DECODE(A.PKGTYP,'3A','1.임원','2.배우자'), A.CUSTNM, B.ORDCODE, C.ORDNAME
+ ORDER BY 1,2;
